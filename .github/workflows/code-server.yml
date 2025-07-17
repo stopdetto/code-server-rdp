@@ -5,28 +5,27 @@ on: [workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
-      - name: Install Code-Server
+      - name: Install Code Server
         run: |
-          sudo apt update
-          sudo apt install -y wget unzip
-          wget https://github.com/coder/code-server/releases/download/v4.90.1/code-server-4.90.1-linux-amd64.tar.gz
-          tar -xvzf code-server-4.90.1-linux-amd64.tar.gz
-          sudo mv code-server-4.90.1-linux-amd64/code-server /usr/local/bin/
-          
-      - name: Setup Ngrok
+          curl -fsSL https://code-server.dev/install.sh | sh
+
+      - name: Start Code Server
+        run: |
+          nohup code-server --bind-addr 127.0.0.1:8080 &
+
+      - name: Install Ngrok
         run: |
           curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
           sudo apt update && sudo apt install ngrok -y
-          ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Start Code Server
+      - name: Start Ngrok Tunnel
+        env:
+          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         run: |
-          nohup code-server --bind-addr 0.0.0.0:8080 --auth none &
-          sleep 10
+          ngrok config add-authtoken $NGROK_AUTH_TOKEN
           nohup ngrok http 8080 &
-          sleep 20
-          curl -s http://127.0.0.1:4040/api/tunnels | grep -o "https://[a-zA-Z0-9.-]*.ngrok.io" > url.txt
-          cat url.txt
+
+      - name: Show Public URL
+        run: sleep 10 && curl -s http://localhost:4040/api/tunnels | grep -o 'https://[^"]*'
